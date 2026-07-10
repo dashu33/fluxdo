@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/category.dart';
+import '../../providers/preferences_provider.dart';
 import '../../models/topic.dart';
 import '../../utils/responsive.dart';
 import 'painted_topic_card.dart';
@@ -46,6 +48,9 @@ Widget buildTopicItem({
       : null;
 
   final isMobile = Responsive.isMobile(context);
+  final titleFontScale = ProviderScope.containerOf(context)
+      .read(preferencesProvider)
+      .topicTitleFontScale;
 
   if (topic.pinned) {
     child = CompactTopicCard(
@@ -77,6 +82,7 @@ Widget buildTopicItem({
       emojiUrlOf: topicCardEmojiUrlResolver,
       statsAvailableWidth: statsAvailableWidth ?? (cardWidth - 64),
       messageStyle: messageStyle,
+      titleFontScale: titleFontScale,
     );
     child = PaintedTopicCard(
       layout: layout,

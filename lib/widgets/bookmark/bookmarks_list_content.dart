@@ -229,6 +229,9 @@ class BookmarksListContent extends ConsumerWidget {
               : (viewportWidth > Breakpoints.maxContentWidth
                   ? Breakpoints.maxContentWidth
                   : viewportWidth);
+          final titleFontScale = ProviderScope.containerOf(context)
+              .read(preferencesProvider)
+              .topicTitleFontScale;
           final layout = TopicCardLayout.obtain(
             identity: bookmarkTopicIdentity(topic),
             topic: topic,
@@ -245,6 +248,7 @@ class BookmarksListContent extends ConsumerWidget {
             bandExpired: reminderExpired,
             statsAvailableWidth: statsAvailableWidth ?? 460,
             emojiUrlOf: topicCardEmojiUrlResolver,
+            titleFontScale: titleFontScale,
           );
           Widget card = PaintedTopicCard(
             key: ValueKey(bookmarkTopicIdentity(topic)),

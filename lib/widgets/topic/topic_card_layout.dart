@@ -141,6 +141,7 @@ class TopicCardLayout {
     String? bandName,
     String? bandReminder,
     bool bandExpired = false,
+    double titleFontScale = 1.0,
   }) {
     final stamp = (
       identityHashCode(topic),
@@ -149,6 +150,7 @@ class TopicCardLayout {
       messageStyle,
       bandExpired,
       identityHashCode(category),
+      titleFontScale,
     );
     final layout = _slot(identity);
     if (layout._stamp == stamp) return layout;
@@ -184,6 +186,7 @@ class TopicCardLayout {
       width: w,
       theme: theme,
       messageStyle: messageStyle,
+      titleFontScale: titleFontScale,
       titleSegments: titleSegments,
       titleIconSpecs: titleIconSpecs,
       parseTitleEmoji: true,
@@ -224,6 +227,7 @@ class TopicCardLayout {
     required ThemeData theme,
     required Category? category,
     double statsAvailableWidth = 460,
+    double titleFontScale = 1.0,
   }) {
     final stamp = (
       identityHashCode(post),
@@ -231,6 +235,7 @@ class TopicCardLayout {
       identityHashCode(theme),
       statsAvailableWidth,
       identityHashCode(category),
+      titleFontScale,
     );
     final layout = _slot(identity);
     if (layout._stamp == stamp) return layout;
@@ -251,6 +256,7 @@ class TopicCardLayout {
       width: w,
       theme: theme,
       messageStyle: false,
+      titleFontScale: titleFontScale,
       titleSegments: titleSegments,
       titleIconSpecs: [
         if (topic?.closed == true)
@@ -377,6 +383,7 @@ class TopicCardLayout {
     required double width,
     required ThemeData theme,
     required bool messageStyle,
+    double titleFontScale = 1.0,
     required List<(String, bool)> titleSegments,
     required List<(IconData, Color)> titleIconSpecs,
     required bool parseTitleEmoji,
@@ -523,7 +530,8 @@ class TopicCardLayout {
     final subjectColor = isFullyRead
         ? scheme.onSurfaceVariant.withValues(alpha: 0.75)
         : scheme.onSurface.withValues(alpha: 0.9);
-    final titleFontSize = messageStyle ? (baseText.fontSize ?? 14) : 15.0;
+    final titleFontSize =
+        (messageStyle ? (baseText.fontSize ?? 14) : 15.0) * titleFontScale;
     final titleWeight = messageStyle
         ? (isFullyRead ? FontWeight.w400 : FontWeight.w500)
         : normalTitleWeight;

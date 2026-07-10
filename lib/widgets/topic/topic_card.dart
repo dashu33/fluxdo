@@ -5,6 +5,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../models/topic.dart';
 import '../../models/category.dart';
 import '../../providers/discourse_providers.dart';
+import '../../providers/preferences_provider.dart';
 import '../../utils/font_awesome_helper.dart';
 import '../../utils/frame_jank_monitor.dart';
 import '../../utils/platform_utils.dart';
@@ -222,9 +223,14 @@ class TopicCard extends ConsumerWidget {
     final titleColor = isFullyRead
         ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.75)
         : theme.colorScheme.onSurface;
+    final topicTitleFontScale = ref.watch(
+      preferencesProvider.select(
+        (preferences) => preferences.topicTitleFontScale,
+      ),
+    );
     // 标题 15sp:Gmail 主题行(14)与原版(16)的折中,置顶后担得起主视觉
     final titleStyle = theme.textTheme.bodyMedium?.copyWith(
-      fontSize: 15,
+      fontSize: 15 * topicTitleFontScale,
       fontWeight: isFullyRead ? FontWeight.w500 : FontWeight.w600,
       height: 1.3,
       color: titleColor,
@@ -893,7 +899,15 @@ class CompactTopicCard extends ConsumerWidget {
     // 同 TopicCard:Card 壳换轻装(elevation=0 主题下视觉逐项等价),
     // 砍每卡一套 AnimatedPhysicalModel 隐式动画基建。
     final cardRadius = BorderRadius.circular(10);
-    final compactTitleStyle = theme.textTheme.labelMedium?.copyWith(
+    final topicTitleFontScale = ref.watch(
+      preferencesProvider.select(
+        (preferences) => preferences.topicTitleFontScale,
+      ),
+    );
+    final baseCompactTitleStyle =
+        theme.textTheme.labelMedium ?? const TextStyle();
+    final compactTitleStyle = baseCompactTitleStyle.copyWith(
+      fontSize: (baseCompactTitleStyle.fontSize ?? 12) * topicTitleFontScale,
       fontWeight: isUnread ? FontWeight.w500 : FontWeight.w400,
       color: isUnread
           ? theme.colorScheme.onSurface

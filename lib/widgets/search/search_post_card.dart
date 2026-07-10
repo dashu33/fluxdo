@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/category.dart';
 import '../../models/search_result.dart';
 import '../../providers/category_provider.dart';
+import '../../providers/preferences_provider.dart';
 import '../../utils/number_utils.dart';
 import '../../utils/platform_utils.dart';
 import '../../utils/responsive.dart';
@@ -36,6 +37,11 @@ class SearchPostCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final topic = post.topic;
+    final topicTitleFontScale = ref.watch(
+      preferencesProvider.select(
+        (preferences) => preferences.topicTitleFontScale,
+      ),
+    );
 
     // 获取分类信息
     final categoryMap = ref.watch(categoryMapProvider).value;
@@ -62,6 +68,7 @@ class SearchPostCard extends ConsumerWidget {
         theme: theme,
         category: category,
         statsAvailableWidth: cardWidth - 64,
+        titleFontScale: topicTitleFontScale,
       );
       Widget card = PaintedTopicCard(
         layout: layout,
@@ -79,7 +86,7 @@ class SearchPostCard extends ConsumerWidget {
     // 搜索结果无已读态,统一用话题卡片的强调态样式
     final titleColor = theme.colorScheme.onSurface;
     final titleStyle = theme.textTheme.bodyMedium?.copyWith(
-      fontSize: 15,
+      fontSize: 15 * topicTitleFontScale,
       fontWeight: FontWeight.w600,
       height: 1.3,
       color: titleColor,

@@ -34,6 +34,7 @@ import '../widgets/topic/topic_item_builder.dart';
 import '../widgets/common/tag_selection_sheet.dart';
 import '../widgets/common/paged_list_footer.dart';
 import '../navigation/nav_action_bus.dart';
+import '../navigation/topic_tab_tap_coordinator.dart';
 import '../providers/app_state_refresher.dart';
 import '../providers/preferences_provider.dart';
 import '../utils/load_more_coordinator.dart';
@@ -668,6 +669,7 @@ class TopicsPage extends ConsumerStatefulWidget {
 class _TopicsPageState extends ConsumerState<TopicsPage>
     with TickerProviderStateMixin {
   late TabController _tabController;
+  late final TopicTabTapCoordinator _topicTabTapCoordinator;
 
   // chip→标题一镜到底的三个测位 key：选中 chip 文字（起点）、标题
   // 前缀零尺寸锚（终点）、头部根（参考系）
@@ -743,6 +745,7 @@ class _TopicsPageState extends ConsumerState<TopicsPage>
   @override
   void initState() {
     super.initState();
+    _topicTabTapCoordinator = TopicTabTapCoordinator(initialActiveIndex: 0);
     _visiblePinnedIds = ref.read(pinnedCategoriesProvider);
     _tabLength = 1 + _visiblePinnedIds.length;
     _tabController = TabController(length: _tabLength, vsync: this);
@@ -786,6 +789,7 @@ class _TopicsPageState extends ConsumerState<TopicsPage>
 
   @override
   void dispose() {
+    _topicTabTapCoordinator.dispose();
     _headerController.dispose();
     _pointerScrollIdleTimer?.cancel();
     for (final controller in _listControllers.values) {
@@ -824,6 +828,7 @@ class _TopicsPageState extends ConsumerState<TopicsPage>
   void _handleTabChange() {
     if (_tabController.indexIsChanging) return;
     if (_currentTabIndex == _tabController.index) return;
+    _topicTabTapCoordinator.syncActiveIndex(_tabController.index);
     setState(() {
       _currentTabIndex = _tabController.index;
     });
@@ -848,9 +853,15 @@ class _TopicsPageState extends ConsumerState<TopicsPage>
 
   /// 检测 pinnedCategories 变化，重建 TabController
   void _syncTabsIfNeeded(List<int> pinnedIds) {
+    final pinnedIdsChanged = !listEquals(_visiblePinnedIds, pinnedIds);
     final desiredLength = 1 + pinnedIds.length;
     _visiblePinnedIds = pinnedIds;
-    if (desiredLength == _tabLength) return;
+    if (desiredLength == _tabLength) {
+      if (pinnedIdsChanged) {
+        _topicTabTapCoordinator.reset(activeIndex: _currentTabIndex);
+      }
+      return;
+    }
 
     final oldIndex = _tabController.index;
     _tabController.removeListener(_handleTabChange);
@@ -860,6 +871,7 @@ class _TopicsPageState extends ConsumerState<TopicsPage>
     _tabController.addListener(_handleTabChange);
     _currentTabIndex = oldIndex < _tabLength ? oldIndex : 0;
     _tabController.index = _currentTabIndex;
+    _topicTabTapCoordinator.reset(activeIndex: _currentTabIndex);
   }
 
   Future<void> _goToLogin() async {
@@ -1301,7 +1313,17 @@ class _TopicsPageState extends ConsumerState<TopicsPage>
           tabController: _tabController,
           pinnedIds: pinnedIds,
           categoryMap: categoryMap,
-          onReselect: () => ref.read(scrollToTopProvider.notifier).trigger(),
+          onReselect: () {
+            final preferences = ref.read(preferencesProvider);
+            _topicTabTapCoordinator.handleTap(
+              index: _tabController.index,
+              singleAction: preferences.bottomSingleTapAction,
+              doubleAction: preferences.bottomDoubleTapAction,
+              dispatch: (navAction) {
+                ref.dispatchNavAction(NavEntryIds.home, navAction);
+              },
+            );
+          },
           onManageCategories: _openCategoryDrawer,
           headerController: _headerController,
           selectedChipKey: _selectedChipKey,

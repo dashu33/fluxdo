@@ -5,6 +5,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../models/category.dart';
 import '../../models/search_result.dart';
 import '../../providers/category_provider.dart';
+import '../../providers/preferences_provider.dart';
 import '../../utils/font_awesome_helper.dart';
 import '../../utils/number_utils.dart';
 import '../../utils/platform_utils.dart';
@@ -29,6 +30,11 @@ class SearchPostCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final topic = post.topic;
+    final topicTitleFontScale = ref.watch(
+      preferencesProvider.select(
+        (preferences) => preferences.topicTitleFontScale,
+      ),
+    );
 
     // 获取分类信息
     final categoryMap = ref.watch(categoryMapProvider).value;
@@ -88,7 +94,12 @@ class SearchPostCard extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          child: _buildTopicTitle(post, topic, theme),
+                          child: _buildTopicTitle(
+                            post,
+                            topic,
+                            theme,
+                            topicTitleFontScale,
+                          ),
                         ),
                         if (post.isAiGenerated || post.postNumber > 1)
                           const SizedBox(width: 8),
@@ -193,10 +204,16 @@ class SearchPostCard extends ConsumerWidget {
   }
 
   Widget _buildTopicTitle(
-      SearchPost post, SearchTopic? topic, ThemeData theme) {
+    SearchPost post,
+    SearchTopic? topic,
+    ThemeData theme,
+    double topicTitleFontScale,
+  ) {
     if (topic == null) return const SizedBox.shrink();
 
-    final titleStyle = theme.textTheme.titleMedium?.copyWith(
+    final baseTitleStyle = theme.textTheme.titleMedium ?? const TextStyle();
+    final titleStyle = baseTitleStyle.copyWith(
+      fontSize: (baseTitleStyle.fontSize ?? 16) * topicTitleFontScale,
       fontWeight: FontWeight.w500,
       height: 1.3,
     );

@@ -31,6 +31,7 @@ import '../widgets/common/topic_badges.dart';
 import '../widgets/common/search_capsule.dart';
 import '../widgets/topic/category_drawer.dart';
 import '../widgets/topic/topic_item_builder.dart';
+import '../widgets/topic/category_level_dropdown.dart';
 import '../widgets/common/tag_selection_sheet.dart';
 import '../widgets/common/paged_list_footer.dart';
 import '../navigation/nav_action_bus.dart';
@@ -954,6 +955,48 @@ class _TopicsPageState extends ConsumerState<TopicsPage>
     CategoryDrawerHost.open();
   }
 
+  /// 切换板块等级：留在首页主从布局，固定并切换对应 Tab
+  void _switchCategoryLevel(Category category) {
+    final currentId = _currentCategoryId();
+    if (currentId == category.id) return;
+
+    final pinned = ref.read(pinnedCategoriesProvider);
+    final notifier = ref.read(pinnedCategoriesProvider.notifier);
+
+    if (pinned.contains(category.id)) {
+      // 目标已固定：直接切 Tab
+      final tabIndex = _visiblePinnedIds.indexOf(category.id);
+      if (tabIndex >= 0) {
+        _tabController.animateTo(tabIndex + 1);
+      } else {
+        ref.read(activeSidebarCategoryIdProvider.notifier).state = category.id;
+      }
+      return;
+    }
+
+    if (currentId != null && pinned.contains(currentId)) {
+      // 用同级等级替换当前固定项，保持 Tab 位置与主从布局
+      notifier.replace(currentId, category.id);
+      // 索引不变时不会触发 tab change，需手动同步
+      ref.read(currentTabCategoryIdProvider.notifier).state = category.id;
+      ref.read(activeSidebarCategoryIdProvider.notifier).state = category.id;
+      setState(() {});
+      return;
+    }
+
+    // 当前未固定：追加到 Tab 栏并切过去
+    notifier.add(category.id);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(activeSidebarCategoryIdProvider.notifier).state = category.id;
+      ref.read(currentTabCategoryIdProvider.notifier).state = category.id;
+      final tabIndex = _visiblePinnedIds.indexOf(category.id);
+      if (tabIndex >= 0 && _tabController.index != tabIndex + 1) {
+        _tabController.animateTo(tabIndex + 1);
+      }
+    });
+  }
+
   Future<void> _openTagSelection() async {
     final categoryId = _currentCategoryId();
     final currentTags = ref.read(tabTagsProvider(categoryId));
@@ -1231,6 +1274,8 @@ class _TopicsPageState extends ConsumerState<TopicsPage>
   /// AppBar 一致），compact 密度只收触控目标不缩 glyph;左右缘 8 +
   /// compact 按钮内边 8 = glyph 距屏 16（M3 基线）。
   Widget _buildToolbar(bool isLoggedIn, Widget filterMenu) {
+    final categoryMap = ref.watch(categoryMapProvider).value;
+    final currentCategory = _getCurrentCategory(_visiblePinnedIds, categoryMap);
     return SizedBox(
       height: _toolbarRowHeight,
       child: Row(
@@ -1248,7 +1293,20 @@ class _TopicsPageState extends ConsumerState<TopicsPage>
           // 时标题内部自行让步（前缀先缩，见 _TitleTabPrefix），刚性
           // Row + Spacer 版在窄面板直接撑破右簇
           Expanded(
-            child: Align(alignment: Alignment.centerLeft, child: filterMenu),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(child: filterMenu),
+                  if (currentCategory != null)
+                    CategoryLevelDropdown(
+                      currentCategory: currentCategory,
+                      onCategoryChanged: _switchCategoryLevel,
+                    ),
+                ],
+              ),
+            ),
           ),
           // 搜索落位格：展开态零宽（右簇紧凑无空洞），折叠时随 morph
           // 同曲线张开迎接胶囊缩成的图标（胶囊本体在

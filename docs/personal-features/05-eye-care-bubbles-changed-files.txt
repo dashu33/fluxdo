@@ -1,0 +1,16 @@
+lib/providers/preferences_provider.dart
+lib/settings/definitions/reading_defs.dart
+lib/l10n/modules/appearance/appearance_en.arb
+lib/l10n/modules/appearance/appearance_zh.arb
+lib/l10n/modules/appearance/appearance_zh_HK.arb
+lib/l10n/modules/appearance/appearance_zh_TW.arb
+lib/widgets/post/post_item/widgets/post_segment_frame.dart
+lib/widgets/post/post_item/post_item.dart
+lib/widgets/post/post_item/segmented_long_post.dart
+lib/pages/topic_detail_page/widgets/topic_post_list.dart
+lib/widgets/nested/nested_post_card.dart
+lib/widgets/content/discourse_html_content/builders/eye_care_quote_style.dart
+lib/widgets/content/discourse_html_content/builders/blockquote_builder.dart
+lib/widgets/content/discourse_html_content/builders/quote_card_builder.dart
+test/providers/preferences_provider_test.dart
+test/widgets/post/eye_care_bubble_test.dart

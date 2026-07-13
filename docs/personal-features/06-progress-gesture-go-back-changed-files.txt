@@ -1,0 +1,7 @@
+lib/providers/preferences_provider.dart
+lib/pages/topic_detail_page/widgets/progress_gesture_action_meta.dart
+lib/pages/topic_detail_page/topic_detail_page.dart
+lib/l10n/modules/appearance/appearance_en.arb
+lib/l10n/modules/appearance/appearance_zh.arb
+lib/l10n/modules/appearance/appearance_zh_HK.arb
+lib/l10n/modules/appearance/appearance_zh_TW.arb

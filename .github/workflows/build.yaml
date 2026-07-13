@@ -8,6 +8,7 @@ on:
 env:
   IS_STABLE: ${{ !contains(github.ref, '-') }}
   IS_PERSONAL: ${{ contains(github.ref, 'personal') }}
+  ANDROID_NDK_VERSION: '27.3.13750724'
 
 jobs:
   build:
@@ -18,6 +19,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - platform: android
+            os: ubuntu-latest
+            arch: arm64-v8a
+            rust-target: aarch64-linux-android
+            flutter-target: android-arm64
+          - platform: android
+            os: ubuntu-latest
+            arch: armeabi-v7a
+            rust-target: armv7-linux-androideabi
+            flutter-target: android-arm
+          - platform: android
+            os: ubuntu-latest
+            arch: x86_64
+            rust-target: x86_64-linux-android
+            flutter-target: android-x64
           - platform: ios
             os: macos-latest
           - platform: macos
@@ -33,10 +49,35 @@ jobs:
             arch: x86_64
 
     steps:
+      # ubuntu-latest 可用空间仅 ~14GB,Flutter+NDK+Rust 缓存+Gradle 产物会把盘写满,
+      # 先删掉本构建用不到的预装组件,约可腾出 25GB+
+      - name: Free disk space
+        if: startsWith(matrix.platform, 'android')
+        run: |
+          echo "清理前:" && df -h /
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android/sdk/ndk \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/share/swift \
+            /usr/local/share/powershell \
+            /usr/local/share/chromium
+          sudo docker image prune --all --force > /dev/null 2>&1 || true
+          echo "清理后:" && df -h /
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Setup Java
+        if: startsWith(matrix.platform, 'android')
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -61,9 +102,71 @@ jobs:
         if: matrix.platform == 'macos'
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
+      - name: Setup Android build environment
+        if: startsWith(matrix.platform, 'android')
+        run: |
+          rustup target add ${{ matrix.rust-target }}
+          cargo install cargo-ndk
+          sudo apt-get update && sudo apt-get install -y cmake
+
+      - name: Setup Android NDK
+        if: startsWith(matrix.platform, 'android')
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'ndk;${{ env.ANDROID_NDK_VERSION }}'
+
+      - name: Configure Android NDK path
+        if: startsWith(matrix.platform, 'android')
+        run: |
+          ndk_path="${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}"
+          test -d "${ndk_path}"
+          echo "ANDROID_NDK_HOME=${ndk_path}" >> "${GITHUB_ENV}"
+          echo "ANDROID_NDK_ROOT=${ndk_path}" >> "${GITHUB_ENV}"
+
+      # Optional personal-branch signing. Without secrets, Gradle falls back to
+      # debug signing so Android APKs still build for self-use releases.
+      - name: Setup Android Signing (optional)
+        if: startsWith(matrix.platform, 'android')
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_PROPERTIES: ${{ secrets.ANDROID_KEY_PROPERTIES }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "${ANDROID_KEYSTORE_BASE64}" ] && [ -n "${ANDROID_KEY_PROPERTIES}" ]; then
+            echo "${ANDROID_KEYSTORE_BASE64}" | base64 -d > android/app/upload-keystore.jks
+            echo "${ANDROID_KEY_PROPERTIES}" > android/key.properties
+            echo "Using release keystore from secrets"
+          else
+            echo "No Android signing secrets; APK will use debug signing fallback"
+          fi
+          if [ -n "${GOOGLE_SERVICES_JSON}" ]; then
+            echo "${GOOGLE_SERVICES_JSON}" | base64 -d > android/app/google-services.json
+          else
+            echo "Using committed google-services.json"
+          fi
+
       - name: Configure Git for CocoaPods
         if: matrix.platform == 'ios' || matrix.platform == 'macos'
         run: git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Build Android
+        if: startsWith(matrix.platform, 'android')
+        run: |
+          dart tool/flutterw.dart build apk --release --target-platform ${{ matrix.flutter-target }} --dart-define=cronetHttpNoPlay=true --split-debug-info=build/symbols
+          unzip -l build/app/outputs/flutter-apk/app-release.apk | grep "lib/${{ matrix.arch }}/libdoh_proxy.so"
+          cmp -s core/doh_proxy/certs/ca.der android/app/src/main/res/raw/proxy_ca.der
+          cmp -s core/doh_proxy/certs/ca.crt assets/certs/proxy_ca.pem
+          mkdir -p dist
+          mv build/app/outputs/flutter-apk/app-release.apk dist/fluxdo-${{ matrix.arch }}.apk
+
+      - name: Archive Dart symbols
+        if: startsWith(matrix.platform, 'android')
+        uses: actions/upload-artifact@v4
+        with:
+          name: dart-symbols-${{ matrix.arch }}
+          path: build/symbols
+          retention-days: 90
+          if-no-files-found: error
 
       - name: Build iOS
         if: matrix.platform == 'ios'
@@ -149,9 +252,8 @@ jobs:
           path: ./dist
           overwrite: true
 
-  upload:
-    needs:
-      - build
+  release:
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -164,16 +266,9 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: ./dist/
+          path: ./dist
           pattern: artifact-*
           merge-multiple: true
-
-      - name: List artifacts
-        run: ls -la ./dist/
-
-      - name: Get version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Install git-cliff
         uses: taiki-e/install-action@v2
@@ -187,8 +282,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.ref_name }}"
-          if [[ "${{ env.IS_STABLE }}" == "true" ]]; then
-            PREV=$(git describe --tags --abbrev=0 --exclude='*-*' "${TAG}^" 2>/dev/null || true)
+          if [[ "$TAG" == *personal* ]]; then
+            PREV=$(git tag --list 'v*-personal.*' --sort=-creatordate | sed -n '2p' || true)
             EXTRA=(--ignore-tags '.*-(alpha|beta|rc|personal).*')
           else
             PREV=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)
@@ -203,7 +298,6 @@ jobs:
       - name: Fallback - Generate release notes (legacy)
         if: steps.cliff_notes.outcome == 'failure'
         run: |
-          echo "::warning::git-cliff 失败，回退到 git log"
           TAG="${{ github.ref_name }}"
           PREV=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)
           if [ -n "$PREV" ]; then RANGE="${PREV}..${TAG}"; else RANGE="$TAG"; fi

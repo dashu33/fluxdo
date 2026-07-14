@@ -233,6 +233,13 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage>
   bool _isParentActive = true;
   bool _isScreenTrackRunning = false;
 
+  /// 进度条水平 scrub：拖动中锁底栏、禁止自动分页，并串行跳楼
+  bool _isProgressScrubbing = false;
+  bool _scrubJumpInFlight = false;
+  int? _scrubPendingPostNumber;
+  /// 队列中是否有「松手 finalize」语义（只对最后一次目标生效）
+  bool _scrubPendingFinalize = false;
+
   /// 初始定位期间被抑制的 eyeline 上报楼层（定位完成后回放）
   int? _suppressedEyelinePostNumber;
 
@@ -1491,9 +1498,13 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage>
   ) {
     // Overlay 及其子树实际消费的全部低频输入;detail 对象本身不入签名
     // (它每次更新都是新实例),只取 Overlay 用到的字段。
+    final maxPostNumber = detail.postsCount > 0
+        ? detail.postsCount
+        : detail.postStream.stream.length;
     final signature = (
       isLoggedIn: isLoggedIn,
       totalCount: detail.postStream.stream.length,
+      maxPostNumber: maxPostNumber,
       hasSummary: detail.hasSummary,
       isPrivateMessage: detail.isPrivateMessage,
       isSummaryMode: notifier.isSummaryMode,
@@ -1506,6 +1517,16 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage>
     if (cached != null && cached.signature == signature) {
       return cached.widget;
     }
+
+    // 缓存前先同步一次 scrub 起点，避免首帧 listenable 仍是默认 1
+    final seedPost = _controller.effectivePostNumberForActions ??
+        _resolvedViewportPostNumber ??
+        _resolvePostNumberFromStreamIndex(
+          detail,
+          _controller.streamIndexNotifier.value,
+        );
+    _controller.updateViewportPostNumber(seedPost);
+
     final overlay = TopicDetailOverlay(
       showBottomBarListenable: _controller.showBottomBarNotifier,
       isLoggedIn: isLoggedIn,
@@ -1520,6 +1541,13 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage>
       onReply: () => _handleReply(null),
       onProgressTap: _showTimelineSheetForCurrent,
       onProgressGesture: _handleProgressGestureForCurrent,
+      onProgressScrubToPostNumber: (postNumber) =>
+          unawaited(_scrubToPostNumber(postNumber)),
+      onProgressScrubEnd: (postNumber) =>
+          unawaited(_scrubToPostNumber(postNumber, finalize: true)),
+      onProgressScrubCancel: _endProgressScrub,
+      currentPostNumberListenable: _controller.viewportPostNumberNotifier,
+      maxPostNumber: maxPostNumber,
       isSummaryMode: notifier.isSummaryMode,
       isAuthorOnlyMode: notifier.isAuthorOnlyMode,
       isTopLevelMode: notifier.isTopLevelMode,
@@ -2048,20 +2076,6 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage>
       );
     }
 
-    // 跳转中：等待包含目标帖子的新数据 - 显示骨架屏
-    final jumpTarget = _controller.jumpTargetPostNumber;
-    if (jumpTarget != null && detail != null) {
-      final posts = detail.postStream.posts;
-      // 检查目标帖子是否在当前加载的范围内
-      final hasTarget =
-          posts.isNotEmpty &&
-          posts.first.postNumber <= jumpTarget &&
-          posts.last.postNumber >= jumpTarget;
-      if (!hasTarget) {
-        return _wrapWithConstraint(const PostListSkeleton(withHeader: false));
-      }
-    }
-
     Widget content = const SizedBox();
 
     if (detailAsync.hasError && detail == null) {
@@ -2075,8 +2089,19 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage>
         ],
       );
     } else if (detail != null) {
-      // 正常内容构建 (保持原有逻辑，但简化提取)
-      content = _buildPostListContent(context, detail, notifier, isLoggedIn);
+      // 跳转中目标尚未加载：骨架只替换列表区域，绝不 early-return 整页，
+      // 否则 Overlay（进度条/底栏）会一起消失，scrub 快速拖时像「整屏空白」。
+      final jumpTarget = _controller.jumpTargetPostNumber;
+      final posts = detail.postStream.posts;
+      final hasJumpTarget = jumpTarget == null ||
+          (posts.isNotEmpty &&
+              posts.first.postNumber <= jumpTarget &&
+              posts.last.postNumber >= jumpTarget);
+      if (!hasJumpTarget) {
+        content = const PostListSkeleton(withHeader: false);
+      } else {
+        content = _buildPostListContent(context, detail, notifier, isLoggedIn);
+      }
     }
 
     // Stack 组装

@@ -71,6 +71,9 @@ class TopicDetailController extends ChangeNotifier {
   TopicScrollState _scrollState;
   double _accumulatedScrollDelta = 0;
 
+  /// scrub 拖动中：禁止程序滚动把底栏藏起来，并保持底栏可见
+  bool _scrubbing = false;
+
   /// 底部栏显示状态
   final ValueNotifier<bool> showBottomBarNotifier = ValueNotifier<bool>(false);
 
@@ -107,6 +110,10 @@ class TopicDetailController extends ChangeNotifier {
 
   /// stream 索引
   final ValueNotifier<int> streamIndexNotifier = ValueNotifier<int>(1);
+
+  /// 真实楼层号（post_number），供进度条 scrub 起点细粒度更新
+  final ValueNotifier<int> viewportPostNumberNotifier =
+      ValueNotifier<int>(1);
 
   Timer? _screenTrackThrottleTimer;
   bool _trackEnabled;
@@ -234,8 +241,23 @@ class TopicDetailController extends ChangeNotifier {
     _handleBottomBarScrollDelta(delta);
   }
 
+  /// 进入/退出进度条 scrub：拖动中保持底栏，忽略程序滚动触发的显隐
+  void setScrubbing(bool value) {
+    if (_scrubbing == value) return;
+    _scrubbing = value;
+    _accumulatedScrollDelta = 0;
+    if (value && !_scrollState.showBottomBar) {
+      _scrollState = _scrollState.copyWith(showBottomBar: true);
+      showBottomBarNotifier.value = true;
+    }
+  }
+
+  bool get isScrubbing => _scrubbing;
+
   void _handleBottomBarScrollDelta(double delta) {
     if (delta == 0) return;
+    // scrub 程序滚动方向杂乱，勿据此藏底栏
+    if (_scrubbing) return;
 
     if ((_accumulatedScrollDelta > 0 && delta < 0) ||
         (_accumulatedScrollDelta < 0 && delta > 0)) {
@@ -312,19 +334,27 @@ class TopicDetailController extends ChangeNotifier {
   }
 
   /// 准备跳转到帖子（重新加载数据）
-  void prepareJumpToPost(int postNumber) {
+  ///
+  /// [hideUntilPositioned] 为 true 时列表 Opacity 置 0，适合一次定位跳转。
+  /// scrub 等连续看贴场景应传 false，并配合 preserve 内容的 reload。
+  void prepareJumpToPost(
+    int postNumber, {
+    bool hideUntilPositioned = true,
+  }) {
     _updateScrollState(
       TopicScrollState(
         showBackToTop: _scrollState.showBackToTop,
         showBottomBar: _scrollState.showBottomBar,
         hasInitialScrolled: false,
-        isPositioned: false,
+        isPositioned:
+            hideUntilPositioned ? false : _scrollState.isPositioned,
         jumpTargetPostNumber: postNumber,
         initialCenterPostNumber: null,
         viewportPostNumber: _scrollState.viewportPostNumber,
         keyboardSelectedPostNumber: postNumber,
       ),
     );
+    _syncViewportPostNumberNotifier(postNumber);
   }
 
   /// 准备刷新
@@ -385,19 +415,29 @@ class TopicDetailController extends ChangeNotifier {
   }
 
   /// 本地跳转到帖子（不重新请求，仅重置视图中心）
-  void jumpToPostLocally(int postNumber) {
+  ///
+  /// [hideUntilPositioned] 为 true（默认）时会将列表 Opacity 置 0，
+  /// 等待定位完成后再显示，避免大跨度重排时闪到错误位置。
+  /// scrub 拖动等连续交互应传 false，否则会出现「中间没内容」。
+  void jumpToPostLocally(
+    int postNumber, {
+    int? anchorPostNumber,
+    bool hideUntilPositioned = true,
+  }) {
     // 重置可见性数据
     resetVisibility();
 
     _updateScrollState(
       _scrollState.copyWith(
         hasInitialScrolled: false,
-        isPositioned: false,
+        // hideUntilPositioned=false 时保持当前 isPositioned，不隐列表
+        isPositioned: hideUntilPositioned ? false : _scrollState.isPositioned,
         jumpTargetPostNumber: postNumber,
-        initialCenterPostNumber: postNumber,
+        initialCenterPostNumber: anchorPostNumber ?? postNumber,
         keyboardSelectedPostNumber: postNumber,
       ),
     );
+    _syncViewportPostNumberNotifier(postNumber);
   }
 
   // ============ 高亮方法 ============
@@ -469,6 +509,9 @@ class TopicDetailController extends ChangeNotifier {
     if (_scrollState.viewportPostNumber != postNumber) {
       _scrollState = _scrollState.copyWith(viewportPostNumber: postNumber);
     }
+    _syncViewportPostNumberNotifier(
+      keyboardSelectedPostNumber ?? postNumber,
+    );
   }
 
   /// 更新键盘当前选中的帖子（J/K 导航锚点）
@@ -480,6 +523,9 @@ class TopicDetailController extends ChangeNotifier {
     _scrollState = postNumber == null
         ? _scrollState.copyWith(clearKeyboardSelected: true)
         : _scrollState.copyWith(keyboardSelectedPostNumber: postNumber);
+    _syncViewportPostNumberNotifier(
+      postNumber ?? viewportPostNumber,
+    );
   }
 
   /// 更新“键盘选中帖”的可视标识。
@@ -537,7 +583,15 @@ class TopicDetailController extends ChangeNotifier {
     // 可见性相关
     _screenTrackThrottleTimer?.cancel();
     streamIndexNotifier.dispose();
+    viewportPostNumberNotifier.dispose();
 
     super.dispose();
+  }
+
+  void _syncViewportPostNumberNotifier(int? postNumber) {
+    if (postNumber == null || postNumber < 1) return;
+    if (viewportPostNumberNotifier.value != postNumber) {
+      viewportPostNumberNotifier.value = postNumber;
+    }
   }
 }

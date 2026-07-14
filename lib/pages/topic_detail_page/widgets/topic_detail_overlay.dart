@@ -13,6 +13,7 @@ import 'topic_progress_gestures.dart';
 /// 滚动中高频变化的状态一律走 ValueListenable 细粒度下沉,不要提升为
 /// 本组件的构造参数(那会整棵重建底栏 + FAB,实测单次 6~7ms):
 /// - 楼层号([streamIndexListenable])→ 只重建 [TopicProgress]
+/// - scrub 起点([currentPostNumberListenable])→ 只重建手势层起点
 /// - 底栏显隐([showBottomBarListenable],滚动方向切换即翻转)→ 只重建
 ///   三个 AnimatedPositioned 定位包装,内容经 VLB child 缓存整棵短路
 class TopicDetailOverlay extends StatelessWidget {
@@ -29,6 +30,16 @@ class TopicDetailOverlay extends StatelessWidget {
   final VoidCallback onReply;
   final VoidCallback onProgressTap;
   final ValueChanged<ProgressGestureAction>? onProgressGesture;
+  /// scrub 目标为真实楼层号 post_number（不是 stream 序号）
+  final ValueChanged<int>? onProgressScrubToPostNumber;
+  /// scrub 松手时的最终楼层（可做完整跳转）
+  final ValueChanged<int>? onProgressScrubEnd;
+  /// scrub 取消（pan cancel 等）时解锁底栏 / 分页
+  final VoidCallback? onProgressScrubCancel;
+  /// 当前可见帖 post_number 的 listenable，供 scrub 起点
+  final ValueListenable<int> currentPostNumberListenable;
+  /// 话题最大楼层号（posts_count）
+  final int maxPostNumber;
   final bool isSummaryMode;
   final bool isAuthorOnlyMode;
   final bool isTopLevelMode;
@@ -55,6 +66,11 @@ class TopicDetailOverlay extends StatelessWidget {
     required this.onReply,
     required this.onProgressTap,
     this.onProgressGesture,
+    this.onProgressScrubToPostNumber,
+    this.onProgressScrubEnd,
+    this.onProgressScrubCancel,
+    required this.currentPostNumberListenable,
+    this.maxPostNumber = 1,
     this.isSummaryMode = false,
     this.isAuthorOnlyMode = false,
     this.isTopLevelMode = false,
@@ -85,6 +101,12 @@ class TopicDetailOverlay extends StatelessWidget {
             child: Center(
               child: TopicProgressGestures(
                 onAction: onProgressGesture ?? (_) {},
+                // scrub 用真实楼层号，避免隐藏楼导致序号错位
+                currentIndexListenable: currentPostNumberListenable,
+                totalCount: maxPostNumber > 0 ? maxPostNumber : totalCount,
+                onScrubToIndex: onProgressScrubToPostNumber ?? (_) {},
+                onScrubEnd: onProgressScrubEnd,
+                onScrubCancel: onProgressScrubCancel,
                 child: RepaintBoundary(
                   // 楼层号滚动中连续变化,elevation Card 的阴影+抗锯齿裁剪
                   // 重绘不便宜(耗时榜 Card/_ShapeBorderPaint ~3ms);独立

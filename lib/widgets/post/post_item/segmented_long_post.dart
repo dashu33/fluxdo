@@ -191,6 +191,7 @@ class NewEngineChunkSegment extends StatelessWidget {
   final int topicId;
   final bool selected;
   final bool highlight;
+  final bool isTopicOwner;
   final HtmlChunk chunk;
   final int chunkIndex;
   final int imageIndexOffset;
@@ -205,6 +206,7 @@ class NewEngineChunkSegment extends StatelessWidget {
     required this.topicId,
     required this.selected,
     required this.highlight,
+    this.isTopicOwner = false,
     required this.chunk,
     required this.chunkIndex,
     required this.imageIndexOffset,
@@ -224,6 +226,8 @@ class NewEngineChunkSegment extends StatelessWidget {
       post: post,
       selected: selected,
       highlight: highlight,
+      isTopicOwner: isTopicOwner,
+      eyeCareBubblePart: EyeCareBubblePart.middle,
       showBottomBorder: false,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -314,6 +318,8 @@ class LongPostHeaderSegment extends StatelessWidget {
       post: post,
       selected: selected,
       highlight: highlight,
+      isTopicOwner: isTopicOwner,
+      eyeCareBubblePart: EyeCareBubblePart.start,
       showTopDateSeparator: dateSeparatorLabel != null,
       topDateSeparatorLabel: dateSeparatorLabel,
       showDivider: showDivider,
@@ -341,6 +347,7 @@ class LongPostFooterSegment extends ConsumerWidget {
   final int? categoryId;
   final bool selected;
   final bool highlight;
+  final bool isTopicOwner;
   final bool topicHasAcceptedAnswer;
   final List<AcceptedAnswer> acceptedAnswers;
   final String? bottomDateSeparatorLabel;
@@ -367,6 +374,7 @@ class LongPostFooterSegment extends ConsumerWidget {
     this.categoryId,
     required this.selected,
     required this.highlight,
+    this.isTopicOwner = false,
     this.highlightBoostUsername,
     required this.topicHasAcceptedAnswer,
     this.acceptedAnswers = const [],
@@ -392,6 +400,8 @@ class LongPostFooterSegment extends ConsumerWidget {
       post: post,
       selected: selected,
       highlight: highlight,
+      isTopicOwner: isTopicOwner,
+      eyeCareBubblePart: EyeCareBubblePart.end,
       showBottomDateSeparator: bottomDateSeparatorLabel != null,
       bottomDateSeparatorLabel: bottomDateSeparatorLabel,
       child: Column(

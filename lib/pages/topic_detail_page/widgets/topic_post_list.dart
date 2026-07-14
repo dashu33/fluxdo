@@ -19,6 +19,7 @@ import 'package:fluxdo_render/fluxdo_render.dart' show HtmlChunk;
 import '../../../widgets/post/post_item/post_item.dart';
 import '../../../widgets/post/post_item/render_parse_cache.dart';
 import '../../../widgets/post/post_item/segmented_long_post.dart';
+import '../../../widgets/post/post_item/widgets/post_segment_frame.dart';
 import 'topic_detail_header.dart';
 import 'shared_issue_button.dart';
 import 'typing_indicator.dart';
@@ -1165,6 +1166,11 @@ class _TopicPostListState extends State<TopicPostList> {
     final Widget? opSlot = (post.postNumber == 1 && detail.sharedIssueVisible)
         ? SharedIssueButton(topic: detail, onChanged: onSharedIssueChanged)
         : null;
+    final isTopicOwner = isEyeCareTopicOwner(
+      postUsername: post.username,
+      postNumber: post.postNumber,
+      createdByUsername: detail.createdBy?.username,
+    );
     final Widget child;
 
     switch (segment.type) {
@@ -1176,7 +1182,7 @@ class _TopicPostListState extends State<TopicPostList> {
           selected: isSelectedPost,
           highlight: highlight,
           highlightBoostUsername: boostUsername,
-          isTopicOwner: detail.createdBy?.username == post.username,
+          isTopicOwner: isTopicOwner,
           topicHasAcceptedAnswer: detail.hasAcceptedAnswer,
           acceptedAnswers: detail.acceptedAnswers,
           dateSeparatorLabel: dateSeparatorLabel,
@@ -1223,7 +1229,7 @@ class _TopicPostListState extends State<TopicPostList> {
           boostUsername: boostUsername,
           dateLabel: dateSeparatorLabel,
           bottomDateLabel: bottomDateSeparatorLabel,
-          isTopicOwner: detail.createdBy?.username == post.username,
+          isTopicOwner: isTopicOwner,
           hasAcceptedAnswer: detail.hasAcceptedAnswer,
           acceptedAnswers: detail.acceptedAnswers,
           isLoggedIn: isLoggedIn,
@@ -1251,7 +1257,7 @@ class _TopicPostListState extends State<TopicPostList> {
           topicId: detail.id,
           selected: isSelectedPost,
           highlight: highlight,
-          isTopicOwner: detail.createdBy?.username == post.username,
+          isTopicOwner: isTopicOwner,
           dateSeparatorLabel: dateSeparatorLabel,
           showDivider: showDivider,
           onJumpToPost: onJumpToPost,
@@ -1271,7 +1277,8 @@ class _TopicPostListState extends State<TopicPostList> {
         if (cachedChunk != null &&
             identical(cachedChunk.data, data) &&
             cachedChunk.selected == isSelectedPost &&
-            cachedChunk.highlight == highlight) {
+            cachedChunk.highlight == highlight &&
+            cachedChunk.isTopicOwner == isTopicOwner) {
           child = cachedChunk.widget;
           break;
         }
@@ -1280,6 +1287,7 @@ class _TopicPostListState extends State<TopicPostList> {
           topicId: detail.id,
           selected: isSelectedPost,
           highlight: highlight,
+          isTopicOwner: isTopicOwner,
           chunk: segment.chunkData!,
           chunkIndex: ci,
           // 懒解析:首次进入 cacheExtent 时才 parse 该 chunk(带前缀补齐),
@@ -1294,6 +1302,7 @@ class _TopicPostListState extends State<TopicPostList> {
           data: data,
           selected: isSelectedPost,
           highlight: highlight,
+          isTopicOwner: isTopicOwner,
           widget: child,
         );
         break;
@@ -1304,6 +1313,7 @@ class _TopicPostListState extends State<TopicPostList> {
           categoryId: detail.categoryId,
           selected: isSelectedPost,
           highlight: highlight,
+          isTopicOwner: isTopicOwner,
           highlightBoostUsername: boostUsername,
           topicHasAcceptedAnswer: detail.hasAcceptedAnswer,
           acceptedAnswers: detail.acceptedAnswers,
@@ -1395,12 +1405,14 @@ class _ChunkWidgetCacheEntry {
   final NewEngineLongPostData data;
   final bool selected;
   final bool highlight;
+  final bool isTopicOwner;
   final Widget widget;
 
   const _ChunkWidgetCacheEntry({
     required this.data,
     required this.selected,
     required this.highlight,
+    required this.isTopicOwner,
     required this.widget,
   });
 }

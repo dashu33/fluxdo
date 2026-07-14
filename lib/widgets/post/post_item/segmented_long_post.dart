@@ -6,6 +6,7 @@ import 'package:html/parser.dart' as html_parser;
 import '../../../l10n/s.dart';
 import '../../../models/topic.dart';
 import '../../../utils/frame_jank_monitor.dart';
+import '../../../providers/preferences_provider.dart';
 import '../../../services/toast_service.dart';
 import '../../../utils/fluxdo_render_callbacks.dart';
 import '../post_signature_block.dart';
@@ -44,8 +45,9 @@ class NewEngineLongPostData {
     void Function(String quote, Post post)? onQuoteImage,
   }) {
     final parseData = RenderParseCache.longPost(post, () {
-      final preprocessed =
-          FluxdoRenderCallbacks.preprocessCookedForRender(post);
+      final preprocessed = FluxdoRenderCallbacks.preprocessCookedForRender(
+        post,
+      );
       if (preprocessed.length <= HtmlChunker.chunkThreshold) return null;
       // 先按顶层切,再把「大 blockquote」装饰下放拆成多片(让容器内部也跟随
       // sliver 虚拟化,见子包 BlockquoteChunkPos)。拆分后再判 chunk 数 → 单个
@@ -125,8 +127,9 @@ class NewEngineLongPostData {
     final attrs = _attrsString(root); // 保留原 class 等属性
 
     // callout 识别:首行 [!type]([+-] = 可折叠 → 不拆)。
-    final callout =
-        RegExp(r'^\[!([^\]]+)\]([+-])?').firstMatch(root.text.trimLeft());
+    final callout = RegExp(
+      r'^\[!([^\]]+)\]([+-])?',
+    ).firstMatch(root.text.trimLeft());
     if (callout != null) {
       if (callout.group(2) != null) return [whole()]; // 可折叠不拆
       final kind = callout.group(1)!.trim().toLowerCase();
@@ -137,10 +140,10 @@ class NewEngineLongPostData {
             // 中/尾片打属性 → 子包属性识别(只 kind + body,无头)。
             html: i == 0
                 ? '<blockquote$attrs data-fxd-pos="${_pos(i, sub.length)}">'
-                    '${sub[i].html}</blockquote>'
+                      '${sub[i].html}</blockquote>'
                 : '<blockquote$attrs data-fxd-callout="$kind" '
-                    'data-fxd-pos="${_pos(i, sub.length)}">'
-                    '${sub[i].html}</blockquote>',
+                      'data-fxd-pos="${_pos(i, sub.length)}">'
+                      '${sub[i].html}</blockquote>',
             type: HtmlChunkType.blockquote,
             index: i,
           ),
@@ -151,7 +154,8 @@ class NewEngineLongPostData {
     return [
       for (var i = 0; i < sub.length; i++)
         HtmlChunk(
-          html: '<blockquote$attrs data-fxd-pos="${_pos(i, sub.length)}">'
+          html:
+              '<blockquote$attrs data-fxd-pos="${_pos(i, sub.length)}">'
               '${sub[i].html}</blockquote>',
           type: HtmlChunkType.blockquote,
           index: i,
@@ -186,7 +190,7 @@ class NewEngineLongPostData {
 /// 新引擎长帖的单个 chunk 段:用 [FluxdoRender] 渲染 chunk.html。
 /// 自带自研选区(chunk 内),图片/脚注靠 [imageIndexOffset]/[footnotesHtml]
 /// + 共享 [callbacks] 对齐整帖。
-class NewEngineChunkSegment extends StatelessWidget {
+class NewEngineChunkSegment extends ConsumerWidget {
   final Post post;
   final int topicId;
   final bool selected;
@@ -217,10 +221,14 @@ class NewEngineChunkSegment extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     FrameJankMonitor.noteBuild(
       'chk#${post.postNumber}:$chunkIndex/'
       '${(chunk.html.length / 1000).toStringAsFixed(1)}k',
+    );
+    final theme = Theme.of(context);
+    final contentFontScale = ref.watch(
+      preferencesProvider.select((p) => p.contentFontScale),
     );
     return PostSegmentFrame(
       post: post,
@@ -231,11 +239,18 @@ class NewEngineChunkSegment extends StatelessWidget {
       showBottomBorder: false,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: FluxdoRender(
+        // 与短帖 PostItem 一致:正文字号经 baseTextStyle 注入 contentFontScale。
+        // 长帖(尤其 OP 主贴)走分段路径时此前漏掉了这一步。
+        child: callbacks.render(
           cookedHtml: chunk.html,
           parsedNodes: parsedNodes,
           imageIndexOffset: imageIndexOffset,
           footnotesHtml: footnotesHtml,
+          baseTextStyle: theme.textTheme.bodyMedium?.copyWith(
+            height: 1.5,
+            fontSize:
+                (theme.textTheme.bodyMedium?.fontSize ?? 14) * contentFontScale,
+          ),
           // 同 post 各 chunk 共享一个选区作用域 → 选区可跨 chunk。
           selectionScopeId: post.id,
           // chunk 文档序号 → 跨 chunk 选区按 (chunkIndex, docOrder) 逻辑序排序。
@@ -243,28 +258,6 @@ class NewEngineChunkSegment extends StatelessWidget {
           // 被分块切断的单段落接缝:裁掉接缝侧外边距 → 与连续渲染无缝拼接。
           trimTopMargin: chunk.joinsPrevious,
           trimBottomMargin: chunk.joinsNext,
-          linkHandler: callbacks.linkHandler,
-          emojiImageBuilder: callbacks.emojiImageBuilder,
-          mentionTapHandler: callbacks.mentionTapHandler,
-          imageContentBuilder: callbacks.imageContentBuilder,
-          codeBlockHighlighter: callbacks.codeBlockHighlighter,
-          codeBlockBuilder: callbacks.codeBlockBuilder,
-          quoteAvatarBuilder: callbacks.quoteAvatarBuilder,
-          footnoteTapHandler: callbacks.footnoteTapHandler,
-          lazyVideoBuilder: callbacks.lazyVideoBuilder,
-          iframeBuilder: callbacks.iframeBuilder,
-          localDateBuilder: callbacks.localDateBuilder,
-          mathBlockBuilder: callbacks.mathBlockBuilder,
-          mathInlineBuilder: callbacks.mathInlineBuilder,
-          oneboxBuilder: callbacks.oneboxBuilder,
-          imageGridBuilder: callbacks.imageGridBuilder,
-          policyBuilder: callbacks.policyBuilder,
-          pollBuilder: callbacks.pollBuilder,
-          chatTranscriptBuilder: callbacks.chatTranscriptBuilder,
-          svgBuilder: callbacks.svgBuilder,
-          videoBuilder: callbacks.videoBuilder,
-          audioBuilder: callbacks.audioBuilder,
-          onDownloadAttachment: callbacks.onDownloadAttachment,
           // 自研选区恒开(外层系统 SelectionArea 已拆):未登录时
           // onQuoteRequest 为 null,toolbar 自动降级只留「复制/复制引用」。
           selectionEnabled: true,
@@ -273,10 +266,10 @@ class NewEngineChunkSegment extends StatelessWidget {
               : (plainText) => onQuoteSelection!(plainText, post),
           onCopyQuoteRequest: (plainText) =>
               QuoteSelectionHelper.copyQuoteToClipboard(
-            selectedText: plainText,
-            post: post,
-            topicId: topicId,
-          ),
+                selectedText: plainText,
+                post: post,
+                topicId: topicId,
+              ),
           onCopyToast: () =>
               ToastService.showSuccess(context.l10n.common_copiedToClipboard),
         ),

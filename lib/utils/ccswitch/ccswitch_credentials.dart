@@ -312,8 +312,12 @@ String normalizeBaseUrl(String raw) {
     var href = parsed
         .replace(queryParameters: cleanedQuery.isEmpty ? null : cleanedQuery, fragment: '')
         .toString();
-    // Uri.toString may leave trailing ? when query empty; normalize.
+    // Uri.toString may leave trailing ?/# when query/fragment empty; normalize.
     if (href.endsWith('?')) href = href.substring(0, href.length - 1);
+    // Dart Uri keeps a bare trailing '#' after clearing fragment.
+    if (href.endsWith('#')) href = href.substring(0, href.length - 1);
+    href = href.replaceAll(RegExp(r'#+$'), '');
+    href = href.replaceAll(RegExp(r'\?$'), '');
     if (href.endsWith('/') && (parsed.path.isEmpty || parsed.path == '/')) {
       href = href.substring(0, href.length - 1);
     } else if (href.endsWith('/') && parsed.path.length > 1) {

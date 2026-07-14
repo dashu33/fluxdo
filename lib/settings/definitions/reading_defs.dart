@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:app_icons/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -78,29 +79,55 @@ List<SettingsGroup> buildReadingGroups(BuildContext context) {
           onChanged: (ref, v) =>
               ref.read(preferencesProvider.notifier).setEyeCareBubbles(v),
         ),
-        CustomModel(
-          id: 'ccswitchImportApp',
-          title: l10n.ccswitch_importApp,
-          builder: (context, ref) {
-            final current = ref.watch(preferencesProvider).ccswitchImportApp;
-            final l = context.l10n;
-            String label(CcswitchImportApp app) => switch (app) {
-              CcswitchImportApp.claude => l.ccswitch_appClaude,
-              CcswitchImportApp.codex => l.ccswitch_appCodex,
-              CcswitchImportApp.gemini => l.ccswitch_appGemini,
-              CcswitchImportApp.all => l.ccswitch_appAll,
-            };
-            return ListTile(
-              leading: Icon(
-                Symbols.vpn_key_rounded,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              title: Text(l.ccswitch_importApp),
-              subtitle: Text(label(current)),
-              trailing: const Icon(Symbols.chevron_right_rounded),
-              onTap: () => _showCcswitchImportAppPicker(context, ref, current),
-            );
-          },
+        // CC Switch 导入仅 Windows / macOS 有意义（桌面端 deeplink）
+        PlatformConditionalModel(
+          condition: () => !kIsWeb && (Platform.isWindows || Platform.isMacOS),
+          inner: SwitchModel(
+            id: 'ccswitchImportEnabled',
+            title: l10n.ccswitch_importEnabled,
+            subtitle: l10n.ccswitch_importEnabledDesc,
+            icon: Symbols.vpn_key_rounded,
+            getValue: (ref) =>
+                ref.watch(preferencesProvider).ccswitchImportEnabled,
+            onChanged: (ref, v) => ref
+                .read(preferencesProvider.notifier)
+                .setCcswitchImportEnabled(v),
+          ),
+        ),
+        PlatformConditionalModel(
+          condition: () => !kIsWeb && (Platform.isWindows || Platform.isMacOS),
+          inner: CustomModel(
+            id: 'ccswitchImportApp',
+            title: l10n.ccswitch_importApp,
+            builder: (context, ref) {
+              final prefs = ref.watch(preferencesProvider);
+              final enabled = prefs.ccswitchImportEnabled;
+              final current = prefs.ccswitchImportApp;
+              final l = context.l10n;
+              final theme = Theme.of(context);
+              String label(CcswitchImportApp app) => switch (app) {
+                CcswitchImportApp.claude => l.ccswitch_appClaude,
+                CcswitchImportApp.codex => l.ccswitch_appCodex,
+                CcswitchImportApp.gemini => l.ccswitch_appGemini,
+                CcswitchImportApp.all => l.ccswitch_appAll,
+              };
+              return ListTile(
+                enabled: enabled,
+                leading: Icon(
+                  Symbols.vpn_key_rounded,
+                  color: enabled
+                      ? theme.colorScheme.primary
+                      : theme.disabledColor,
+                ),
+                title: Text(l.ccswitch_importApp),
+                subtitle: Text(label(current)),
+                trailing: const Icon(Symbols.chevron_right_rounded),
+                onTap: enabled
+                    ? () => _showCcswitchImportAppPicker(context, ref, current)
+                    : null,
+              );
+            },
+          ),
         ),
       ],
     ),

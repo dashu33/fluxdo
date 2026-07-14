@@ -130,6 +130,39 @@ void main() {
     });
   });
 
+  group('ccswitch import enabled', () {
+    test('defaults to true', () async {
+      final container = await _createContainer();
+      addTearDown(container.dispose);
+
+      expect(
+        container.read(preferencesProvider).ccswitchImportEnabled,
+        isTrue,
+      );
+    });
+
+    test('setter persists and reloads', () async {
+      final container = await _createContainer();
+      addTearDown(container.dispose);
+
+      await container
+          .read(preferencesProvider.notifier)
+          .setCcswitchImportEnabled(false);
+
+      final prefs = container.read(sharedPreferencesProvider);
+      final reloaded = ProviderContainer(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      );
+      addTearDown(reloaded.dispose);
+
+      expect(
+        reloaded.read(preferencesProvider).ccswitchImportEnabled,
+        isFalse,
+      );
+      expect(prefs.getBool('pref_ccswitch_import_enabled'), isFalse);
+    });
+  });
+
   group('ccswitch import app', () {
     test('defaults to codex', () async {
       final container = await _createContainer();

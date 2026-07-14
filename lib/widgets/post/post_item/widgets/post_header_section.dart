@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:app_icons/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -331,7 +334,10 @@ class _PostHeaderSectionState extends ConsumerState<PostHeaderSection> {
                   ],
                 ),
               ),
-              if (post.postNumber == 1) ...[
+              if (!kIsWeb &&
+                  (Platform.isWindows || Platform.isMacOS) &&
+                  post.postNumber == 1 &&
+                  ref.watch(preferencesProvider).ccswitchImportEnabled) ...[
                 const SizedBox(height: 8),
                 CcswitchImportBar(post: post),
               ],

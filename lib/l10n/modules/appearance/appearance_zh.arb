@@ -95,6 +95,8 @@
   "ccswitch_app": "应用",
   "ccswitch_name": "名称",
   "ccswitch_nameHint": "可选，默认时间+URL",
+  "ccswitch_importEnabled": "CC Switch 导入",
+  "ccswitch_importEnabledDesc": "在主帖显示填入 CC Switch 按钮，识别 BASE URL 与 API Key",
   "ccswitch_importApp": "CC Switch 导入应用",
   "ccswitch_importAppDesc": "识别主帖凭据后默认填入的目标应用",
   "ccswitch_appClaude": "Claude",

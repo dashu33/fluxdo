@@ -95,6 +95,8 @@
   "ccswitch_app": "App",
   "ccswitch_name": "Name",
   "ccswitch_nameHint": "Optional, defaults to time + URL",
+  "ccswitch_importEnabled": "CC Switch import",
+  "ccswitch_importEnabledDesc": "Show Fill CC Switch on the OP post to detect BASE URL and API key",
   "ccswitch_importApp": "CC Switch import app",
   "ccswitch_importAppDesc": "Default target app when filling credentials from the OP post",
   "ccswitch_appClaude": "Claude",

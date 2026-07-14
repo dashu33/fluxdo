@@ -219,6 +219,9 @@ class AppPreferences {
   /// 护眼气泡：楼层卡片式底色（楼主绿 / 回帖暖黄）
   final bool eyeCareBubbles;
 
+  /// 主帖 CC Switch 导入条开关
+  final bool ccswitchImportEnabled;
+
   /// CC Switch 默认导入应用（claude/codex/gemini/all）
   final CcswitchImportApp ccswitchImportApp;
 
@@ -302,6 +305,7 @@ class AppPreferences {
     this.showSignatures = true,
     this.boostDanmaku = false,
     this.eyeCareBubbles = false,
+    this.ccswitchImportEnabled = true,
     this.ccswitchImportApp = CcswitchImportApp.codex,
     this.defaultNestedView = false,
     this.nestedLineStyle = NestedLineStyle.auto,
@@ -351,6 +355,7 @@ class AppPreferences {
     bool? showSignatures,
     bool? boostDanmaku,
     bool? eyeCareBubbles,
+    bool? ccswitchImportEnabled,
     CcswitchImportApp? ccswitchImportApp,
     bool? defaultNestedView,
     NestedLineStyle? nestedLineStyle,
@@ -405,6 +410,7 @@ class AppPreferences {
       showSignatures: showSignatures ?? this.showSignatures,
       boostDanmaku: boostDanmaku ?? this.boostDanmaku,
       eyeCareBubbles: eyeCareBubbles ?? this.eyeCareBubbles,
+      ccswitchImportEnabled: ccswitchImportEnabled ?? this.ccswitchImportEnabled,
       ccswitchImportApp: ccswitchImportApp ?? this.ccswitchImportApp,
       defaultNestedView: defaultNestedView ?? this.defaultNestedView,
       nestedLineStyle: nestedLineStyle ?? this.nestedLineStyle,
@@ -469,6 +475,7 @@ class PreferencesNotifier extends StateNotifier<AppPreferences> {
   static const String _showSignaturesKey = 'pref_show_signatures';
   static const String _boostDanmakuKey = 'pref_boost_danmaku';
   static const String _eyeCareBubblesKey = 'pref_eye_care_bubbles';
+  static const String _ccswitchImportEnabledKey = 'pref_ccswitch_import_enabled';
   static const String _ccswitchImportAppKey = 'pref_ccswitch_import_app';
   static const String _defaultNestedViewKey = 'pref_default_nested_view';
   static const String _nestedLineStyleKey = 'pref_nested_line_style';
@@ -542,6 +549,7 @@ class PreferencesNotifier extends StateNotifier<AppPreferences> {
           showSignatures: _prefs.getBool(_showSignaturesKey) ?? true,
           boostDanmaku: _prefs.getBool(_boostDanmakuKey) ?? false,
           eyeCareBubbles: _prefs.getBool(_eyeCareBubblesKey) ?? false,
+          ccswitchImportEnabled: _prefs.getBool(_ccswitchImportEnabledKey) ?? true,
           ccswitchImportApp: CcswitchImportApp.fromString(
             _prefs.getString(_ccswitchImportAppKey),
           ),
@@ -771,6 +779,12 @@ class PreferencesNotifier extends StateNotifier<AppPreferences> {
     if (state.eyeCareBubbles == enabled) return;
     state = state.copyWith(eyeCareBubbles: enabled);
     await _prefs.setBool(_eyeCareBubblesKey, enabled);
+  }
+
+  Future<void> setCcswitchImportEnabled(bool enabled) async {
+    if (state.ccswitchImportEnabled == enabled) return;
+    state = state.copyWith(ccswitchImportEnabled: enabled);
+    await _prefs.setBool(_ccswitchImportEnabledKey, enabled);
   }
 
   Future<void> setCcswitchImportApp(CcswitchImportApp app) async {

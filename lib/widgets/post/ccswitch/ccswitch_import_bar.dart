@@ -317,7 +317,7 @@ class _CcswitchImportBarState extends ConsumerState<CcswitchImportBar> {
     );
   }
 
-  String _appLabel(dynamic l10n, CcswitchImportApp app) {
+  String _appLabel(AppLocalizations l10n, CcswitchImportApp app) {
     return switch (app) {
       CcswitchImportApp.claude => l10n.ccswitch_appClaude,
       CcswitchImportApp.codex => l10n.ccswitch_appCodex,

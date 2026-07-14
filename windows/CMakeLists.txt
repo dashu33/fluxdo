@@ -40,6 +40,9 @@ add_definitions(-DUNICODE -D_UNICODE)
 function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_features(${TARGET} PUBLIC cxx_std_17)
   target_compile_options(${TARGET} PRIVATE /W4 /WX /wd"4100")
+  # Force UTF-8 source/execution charset so MSVC on CP936 does not treat
+  # UTF-8 plugin comments (e.g. en-dash) as C4819 under /WX.
+  target_compile_options(${TARGET} PRIVATE /utf-8)
   target_compile_options(${TARGET} PRIVATE /EHsc)
   target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")
   target_compile_definitions(${TARGET} PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")

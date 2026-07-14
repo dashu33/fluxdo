@@ -68,7 +68,7 @@
   "progressGesture_longPressEnable": "Enable long-press menu",
   "progressGesture_longPressEnableDesc": "Long-press the pill to reveal a fan-shaped menu",
   "progressGesture_longPressMenu": "Long-press menu actions",
-  "progressGesture_longPressMenuDesc": "Pick up to 8 actions; long-press the pill to reveal a fan-shaped menu",
+  "progressGesture_longPressMenuDesc": "Pick up to 8 actions; items always use fixed 8-slot fan positions",
   "progressGesture_longPressReorderHint": "Long-press to drag and reorder",
   "progressGesture_resetDefault": "Reset to default",
   "progressGesture_sectionAvailable": "Available",

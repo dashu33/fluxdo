@@ -68,7 +68,7 @@
   "progressGesture_longPressEnable": "启用长按菜单",
   "progressGesture_longPressEnableDesc": "长按悬浮条弹出半圆功能菜单",
   "progressGesture_longPressMenu": "长按菜单功能",
-  "progressGesture_longPressMenuDesc": "最多选择 8 个；长按悬浮条以半圆菜单展示",
+  "progressGesture_longPressMenuDesc": "最多选择 8 个；按固定 8 槽半圆位置展示，不随数量漂移",
   "progressGesture_longPressReorderHint": "长按拖动调整顺序",
   "progressGesture_resetDefault": "恢复默认",
   "progressGesture_sectionAvailable": "可添加",

@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../providers/preferences_provider.dart';
 import '../../../widgets/common/radial_long_press_menu.dart';
+import '../../../widgets/common/radial_menu_fixed_slots.dart';
 import 'progress_gesture_action_meta.dart';
 
 /// 滑动触发阈值（手指相对起点的距离 ≥ 此值即视为可触发）
@@ -184,6 +185,9 @@ class _TopicProgressGesturesState extends ConsumerState<TopicProgressGestures>
         box.size.height,
       ),
       items: items,
+      // 固定 8 槽：与设置页预览一致，不因当前启用项数重排左右位置。
+      fixedSlots: true,
+      radius: RadialMenuFixedSlots.radius,
     );
 
     // 长按触发，让进度环继续走到 1（视觉上"环走完=菜单完全展开"）

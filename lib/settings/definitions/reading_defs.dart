@@ -9,6 +9,7 @@ import '../../l10n/s.dart';
 import '../../pages/topic_detail_page/widgets/progress_gesture_action_meta.dart';
 import '../../pages/topic_detail_page/widgets/progress_gesture_menu_settings_page.dart';
 import '../../providers/preferences_provider.dart';
+import '../../utils/ccswitch/ccswitch_credentials.dart';
 import '../../services/preloaded_data_service.dart';
 import '../settings_model.dart';
 
@@ -76,6 +77,30 @@ List<SettingsGroup> buildReadingGroups(BuildContext context) {
           getValue: (ref) => ref.watch(preferencesProvider).eyeCareBubbles,
           onChanged: (ref, v) =>
               ref.read(preferencesProvider.notifier).setEyeCareBubbles(v),
+        ),
+        CustomModel(
+          id: 'ccswitchImportApp',
+          title: l10n.ccswitch_importApp,
+          builder: (context, ref) {
+            final current = ref.watch(preferencesProvider).ccswitchImportApp;
+            final l = context.l10n;
+            String label(CcswitchImportApp app) => switch (app) {
+              CcswitchImportApp.claude => l.ccswitch_appClaude,
+              CcswitchImportApp.codex => l.ccswitch_appCodex,
+              CcswitchImportApp.gemini => l.ccswitch_appGemini,
+              CcswitchImportApp.all => l.ccswitch_appAll,
+            };
+            return ListTile(
+              leading: Icon(
+                Symbols.vpn_key_rounded,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              title: Text(l.ccswitch_importApp),
+              subtitle: Text(label(current)),
+              trailing: const Icon(Symbols.chevron_right_rounded),
+              onTap: () => _showCcswitchImportAppPicker(context, ref, current),
+            );
+          },
         ),
       ],
     ),
@@ -579,5 +604,51 @@ void _showGestureActionPicker(
     },
   ).then((selected) {
     if (selected != null) onPicked(selected);
+  });
+}
+
+void _showCcswitchImportAppPicker(
+  BuildContext context,
+  WidgetRef ref,
+  CcswitchImportApp current,
+) {
+  final l10n = context.l10n;
+  final options = [
+    (CcswitchImportApp.codex, l10n.ccswitch_appCodex),
+    (CcswitchImportApp.claude, l10n.ccswitch_appClaude),
+    (CcswitchImportApp.gemini, l10n.ccswitch_appGemini),
+    (CcswitchImportApp.all, l10n.ccswitch_appAll),
+  ];
+
+  showDialog<CcswitchImportApp>(
+    context: context,
+    builder: (context) => SimpleDialog(
+      title: Text(l10n.ccswitch_importApp),
+      children: [
+        for (final (app, label) in options)
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, app),
+            child: Row(
+              children: [
+                Icon(
+                  app == current
+                      ? Symbols.radio_button_checked_rounded
+                      : Symbols.radio_button_unchecked_rounded,
+                  color: app == current
+                      ? Theme.of(context).colorScheme.primary
+                      : null,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Text(label),
+              ],
+            ),
+          ),
+      ],
+    ),
+  ).then((selected) {
+    if (selected != null) {
+      ref.read(preferencesProvider.notifier).setCcswitchImportApp(selected);
+    }
   });
 }

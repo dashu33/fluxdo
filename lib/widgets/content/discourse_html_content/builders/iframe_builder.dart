@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -17,6 +18,26 @@ import '../../../../services/webview_settings.dart';
 import '../../../../services/windows_webview_environment_service.dart';
 import '../../../content/lazy_load_scope.dart';
 
+
+/// Windows: 全页同时存活的 iframe WebView 上限。
+/// 超出时踢掉最早挂载的实例，避免 msedgewebview2 renderer 堆到上百个。
+class _WindowsIframeMountLimiter {
+  static const int maxMounted = 2;
+  static final List<_IframeWidgetState> _mounted = <_IframeWidgetState>[];
+
+  static void acquire(_IframeWidgetState state) {
+    if (_mounted.contains(state)) return;
+    while (_mounted.length >= maxMounted) {
+      final oldest = _mounted.removeAt(0);
+      oldest._forceUnmountFromLimiter();
+    }
+    _mounted.add(state);
+  }
+
+  static void release(_IframeWidgetState state) {
+    _mounted.remove(state);
+  }
+}
 /// 是否需要交互遮罩（macOS 上 WebView 会捕获滚动事件）
 bool get _needsInteractionMask => !kIsWeb && Platform.isMacOS;
 
@@ -157,6 +178,7 @@ class _IframeWidgetState extends State<IframeWidget> with RouteAware {
   /// iframe 在 cacheExtent 内同时拉起 WebView2 进程（Windows 上尤其贵）。
   bool _webViewMounted = false;
   bool _initialized = false;
+  Timer? _unmountTimer;
 
   /// 桌面平台：是否进入交互模式
   bool _interacting = false;
@@ -169,6 +191,8 @@ class _IframeWidgetState extends State<IframeWidget> with RouteAware {
   String get _cacheKey =>
       'iframe_${widget.attributes.fullUrl.hashCode}_${widget.attributes.width}_${widget.attributes.height}';
 
+  bool get _isWindows => !kIsWeb && Platform.isWindows;
+
   @override
   void initState() {
     super.initState();
@@ -179,9 +203,15 @@ class _IframeWidgetState extends State<IframeWidget> with RouteAware {
     super.didChangeDependencies();
     if (!_initialized) {
       _initialized = true;
-      // 同页已加载过、或截图离屏渲染：直接挂 WebView，避免占位漏出。
-      if (LazyLoadScope.isLoaded(context, _cacheKey) ||
-          ScreenshotMode.of(context)) {
+      // 截图离屏渲染：必须直接挂 WebView，避免占位漏出。
+      // Windows 不要因 LazyLoadScope 历史记录一进页就把全部 iframe 重挂上
+      // （实测可把 msedgewebview2 renderer 堆到 100+，整窗假死）。
+      if (ScreenshotMode.of(context)) {
+        _webViewMounted = true;
+        if (_isWindows) {
+          _WindowsIframeMountLimiter.acquire(this);
+        }
+      } else if (!_isWindows && LazyLoadScope.isLoaded(context, _cacheKey)) {
         _webViewMounted = true;
       }
     }
@@ -193,12 +223,74 @@ class _IframeWidgetState extends State<IframeWidget> with RouteAware {
 
   void _mountWebView() {
     if (_webViewMounted) return;
+    if (_isWindows) {
+      _WindowsIframeMountLimiter.acquire(this);
+    }
     LazyLoadScope.markLoaded(context, _cacheKey);
+    if (!mounted) return;
     setState(() {
       _webViewMounted = true;
       _isLoaded = false;
       _hasError = false;
     });
+  }
+
+  void _unmountWebView() {
+    if (!_webViewMounted) return;
+    _unmountTimer?.cancel();
+    _unmountTimer = null;
+    if (_isWindows) {
+      _WindowsIframeMountLimiter.release(this);
+    }
+    if (!mounted) {
+      _webViewMounted = false;
+      return;
+    }
+    setState(() {
+      _webViewMounted = false;
+      _isLoaded = false;
+      _hasError = false;
+      _interacting = false;
+    });
+  }
+
+  /// limiter 踢出最早实例时调用（可能已 unmounted）。
+  void _forceUnmountFromLimiter() {
+    _unmountTimer?.cancel();
+    _unmountTimer = null;
+    if (!_webViewMounted) return;
+    if (!mounted) {
+      _webViewMounted = false;
+      return;
+    }
+    setState(() {
+      _webViewMounted = false;
+      _isLoaded = false;
+      _hasError = false;
+      _interacting = false;
+    });
+  }
+
+  void _onVisibilityChanged(VisibilityInfo info) {
+    if (ScreenshotMode.of(context)) return;
+    final visible = info.visibleFraction > 0.05;
+    if (visible) {
+      _unmountTimer?.cancel();
+      _unmountTimer = null;
+      if (!_webViewMounted) {
+        _mountWebView();
+      }
+      return;
+    }
+    // Windows：离开视口后卸载，真正回收 WebView2 进程。
+    if (_isWindows && _webViewMounted) {
+      _unmountTimer?.cancel();
+      _unmountTimer = Timer(const Duration(milliseconds: 600), () {
+        if (mounted && _webViewMounted) {
+          _unmountWebView();
+        }
+      });
+    }
   }
 
   @override
@@ -213,6 +305,10 @@ class _IframeWidgetState extends State<IframeWidget> with RouteAware {
 
   @override
   void dispose() {
+    _unmountTimer?.cancel();
+    if (_isWindows) {
+      _WindowsIframeMountLimiter.release(this);
+    }
     appRouteObserver.unsubscribe(this);
     _removeOverlay();
     _unlockLayoutIfNeeded();
@@ -306,17 +402,15 @@ class _IframeWidgetState extends State<IframeWidget> with RouteAware {
       child: sizedContent,
     );
 
-    // 未挂载时用 VisibilityDetector：刚进视口就创建 WebView。
-    // 已挂载后不再包一层，避免无意义的可见性回调。
-    if (_webViewMounted) return padded;
+    // 用 VisibilityDetector 管挂载/卸载：
+    // - 进视口：创建 WebView
+    // - Windows 离视口：延时卸载，避免 renderer 进程只增不减
+    // 非 Windows 且已挂载时不再包一层，行为与旧版一致。
+    if (_webViewMounted && !_isWindows) return padded;
 
     return VisibilityDetector(
       key: Key(_cacheKey),
-      onVisibilityChanged: (info) {
-        if (!_webViewMounted && info.visibleFraction > 0.01) {
-          _mountWebView();
-        }
-      },
+      onVisibilityChanged: _onVisibilityChanged,
       child: padded,
     );
   }
